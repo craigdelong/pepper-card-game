@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pepper - Midwestern Trick-Taking Card Game</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .felt-table {
+      background: radial-gradient(circle at center, #065f46 0%, #064e3b 65%, #022c22 100%);
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.6), 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+    }
+    .card-shadow {
+      box-shadow: 0 8px 16px -2px rgba(0, 0, 0, 0.35), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    }
+    .card-back {
+      background: repeating-linear-gradient(45deg, #1e3a8a, #1e3a8a 6px, #172554 6px, #172554 12px);
+      border: 2px solid #ffffff;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-between p-3 selection:bg-emerald-500 selection:text-white select-none relative overflow-x-hidden">
+
+  <!-- Confetti Canvas for Victory -->
+  <canvas id="confetti-canvas" class="pointer-events-none fixed inset-0 z-50 w-full h-full"></canvas>
+
+  <!-- Header & Match Scoreboard -->
+  <header class="w-full max-w-2xl flex items-center justify-between pt-1 pb-2 px-2 border-b border-slate-800">
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🌶️</span>
+      <div>
+        <h1 class="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
+          Pepper <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-900/80 text-emerald-300 border border-emerald-700/60">Midwest Bid Euchre</span>
+        </h1>
+        <div class="flex items-center gap-2 text-[11px] text-slate-400">
+          <span>Target: 42 pts</span>
+          <span class="text-slate-600">&bull;</span>
+          <span class="text-emerald-400 font-bold">Us: <span id="match-score-us">0</span></span>
+          <span class="text-slate-600">&bull;</span>
+          <span class="text-rose-400 font-bold">Them: <span id="match-score-them">0</span></span>
+          <span class="text-slate-600">&bull;</span>
+          <span class="text-amber-400 text-[10px]" id="header-lifetime-record">Career: 0W - 0L</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btn-profile" class="text-xs text-slate-300 hover:text-white transition-colors py-1 px-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-1 hover:border-slate-700">
+        <span>⚙️</span> Profile
+      </button>
+      <button id="btn-sound" class="text-xs text-slate-400 hover:text-slate-200 transition-colors py-1 px-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-1">
+        <span>🔊</span>
+        <span id="sound-label">Sound</span>
+      </button>
+      <button id="btn-deal" class="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 py-1.5 px-3 rounded-lg shadow transition-colors">
+        Deal New Hand
+      </button>
+    </div>
+  </header>
+
+  <!-- Game Table Container -->
+  <main class="w-full max-w-2xl flex-1 flex flex-col items-center justify-between gap-2.5 py-2">
+
+    <!-- Trump Selection & Bower Explainer Bar -->
+    <div class="w-full bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 shadow-sm">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold text-slate-300">Trump Suit:</span>
+        <div id="trump-selectors" class="flex items-center gap-1">
+          <button data-trump="Spades" class="trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 flex items-center gap-1">
+            <span>♠</span> Spades
+          </button>
+          <button data-trump="Hearts" class="trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-red-400 hover:bg-slate-700 border border-slate-700 flex items-center gap-1">
+            <span>♥</span> Hearts
+          </button>
+          <button data-trump="Clubs" class="trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700 flex items-center gap-1">
+            <span>♣</span> Clubs
+          </button>
+          <button data-trump="Diamonds" class="trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-red-400 hover:bg-slate-700 border border-slate-700 flex items-center gap-1">
+            <span>♦</span> Diamonds
+          </button>
+          <button data-trump="No Trump" class="trump-btn px-2 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700">
+            NT
+          </button>
+        </div>
+      </div>
+      <div id="bower-guide" class="text-[11px] text-slate-400 flex items-center gap-2 px-2 py-1 bg-slate-950/60 rounded-lg border border-slate-800">
+        <span id="bower-text">Pick a trump to see Bowers</span>
+      </div>
+    </div>
+
+    <!-- Active Contract & Phase Banner -->
+    <div id="contract-banner" class="w-full bg-slate-900/60 border border-slate-800/80 px-3 py-1.5 rounded-xl text-xs flex items-center justify-between text-slate-300">
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-amber-400" id="contract-title">Phase: Bidding</span>
+        <span class="text-slate-500">|</span>
+        <span id="contract-desc" class="text-slate-300">Auction in progress around table...</span>
+      </div>
+      <div id="bidding-pill" class="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+        High Bid: None
+      </div>
+    </div>
+
+    <!-- The 4-Player Card Table -->
+    <div class="w-full felt-table rounded-3xl p-4 sm:p-5 flex flex-col justify-between items-center relative min-h-[360px] border-4 border-amber-950/60 overflow-hidden">
+
+      <!-- North: Partner -->
+      <div class="flex flex-col items-center gap-1 z-10">
+        <div class="text-[11px] font-bold text-emerald-200/90 flex items-center gap-1 bg-black/40 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+          <span id="north-title">🤝 Partner (North)</span>
+          <span id="north-tricks-badge" class="text-emerald-400 ml-1">0 tricks</span>
+        </div>
+        <div id="north-bid-badge" class="text-[10px] text-amber-300 font-bold"></div>
+        <div id="north-hand" class="flex -space-x-4"></div>
+      </div>
+
+      <!-- Center Trick Table & East/West Opponents -->
+      <div class="w-full flex items-center justify-between px-2 my-1">
+        <!-- West: Opponent 1 -->
+        <div class="flex flex-col items-center gap-1 z-10">
+          <div class="text-[10px] font-bold text-rose-300/90 bg-black/40 px-2 py-0.5 rounded-full border border-rose-500/30">
+            <span id="west-title">West</span>
+          </div>
+          <div id="west-bid-badge" class="text-[10px] text-amber-300 font-bold"></div>
+          <div id="west-hand" class="flex flex-col -space-y-6"></div>
+        </div>
+
+        <!-- Center Trick & Auction Surface -->
+        <div class="flex-1 flex flex-col items-center justify-center p-2 mx-2 z-20 min-h-[160px]">
+          <div class="text-xs font-semibold text-emerald-300/90 mb-2 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-600/40 text-center" id="trick-status">
+            Bidding in progress...
+          </div>
+
+          <!-- Bidding Auction Controls (Visible during Player's Bid) -->
+          <div id="bidding-panel" class="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-amber-500/40 rounded-2xl p-3 shadow-2xl flex flex-col items-center gap-2 hidden">
+            <span class="text-xs font-bold text-amber-300">Your Turn to Bid (Need to beat current high bid):</span>
+            <div class="grid grid-cols-4 gap-1.5 w-full">
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="1">1</button>
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="2">2</button>
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="3">3</button>
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="4">4</button>
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="5">5</button>
+              <button class="bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded-lg border border-slate-700" data-bid="6">6</button>
+              <button class="bid-btn py-1.5 px-1 bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black rounded-lg col-span-2 shadow" data-bid="little-pepper">Little Pepper (6)</button>
+            </div>
+            <div class="flex items-center gap-2 w-full pt-1">
+              <button class="bid-btn flex-1 py-1.5 bg-rose-900/80 hover:bg-rose-800 text-rose-200 text-xs font-bold rounded-lg border border-rose-700" data-bid="pass">Pass</button>
+              <button class="bid-btn flex-1 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-black rounded-lg shadow" data-bid="big-pepper">Big Pepper (Alone)</button>
+            </div>
+          </div>
+
+          <!-- Card Exchange Choice Panel (Visible after Player wins 1-6 / Little Pepper bid) -->
+          <div id="exchange-choice-panel" class="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-amber-500/50 rounded-2xl p-3 shadow-2xl flex flex-col items-center gap-2 hidden">
+            <span class="text-xs font-bold text-amber-300 text-center">Swap a card with Partner or Play Together?</span>
+            <div class="flex items-center gap-2 w-full pt-1">
+              <button id="btn-do-exchange" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow transition-colors flex flex-col items-center">
+                <span>🔄 Swap with Partner</span>
+                <span class="text-[9px] text-emerald-100 font-normal">Partner sits out</span>
+              </button>
+              <button id="btn-skip-exchange" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-600 transition-colors flex flex-col items-center">
+                <span>🤝 Play with Partner</span>
+                <span class="text-[9px] text-slate-400 font-normal">All 4 players play</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Surrender (Drop Out) Decision Panel -->
+          <div id="surrender-panel" class="w-full max-w-sm bg-slate-900/95 backdrop-blur border border-rose-500/50 rounded-2xl p-3 shadow-2xl flex flex-col items-center gap-2 hidden">
+            <span class="text-xs font-bold text-rose-300 text-center" id="surrender-prompt">Opponents bid 3 in Spades! Surrender or Challenge?</span>
+            <div class="flex items-center gap-3 w-full pt-1">
+              <button id="btn-challenge" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow transition-colors">
+                ⚔️ Play &amp; Challenge
+              </button>
+              <button id="btn-surrender" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-bold rounded-xl border border-rose-500/40 transition-colors">
+                🏳️ Surrender (0 pts)
+              </button>
+            </div>
+            <span class="text-[10px] text-slate-400 text-center">If you challenge and take 0 tricks, you suffer a penalty equal to their bid!</span>
+          </div>
+
+          <!-- 4 Played Cards on the Table -->
+          <div id="trick-arena" class="relative w-48 h-36 flex items-center justify-center">
+            <div id="trick-north" class="absolute top-0 w-14 h-20 bg-white rounded-lg p-1 card-shadow hidden flex-col justify-between items-center text-xs"></div>
+            <div id="trick-west" class="absolute left-0 w-14 h-20 bg-white rounded-lg p-1 card-shadow hidden flex-col justify-between items-center text-xs"></div>
+            <div id="trick-east" class="absolute right-0 w-14 h-20 bg-white rounded-lg p-1 card-shadow hidden flex-col justify-between items-center text-xs"></div>
+            <div id="trick-south" class="absolute bottom-0 w-14 h-20 bg-white rounded-lg p-1 card-shadow hidden flex-col justify-between items-center text-xs ring-2 ring-emerald-400"></div>
+            <div id="trick-empty" class="w-20 h-28 border-2 border-dashed border-emerald-400/30 rounded-xl flex items-center justify-center text-[11px] text-emerald-300/50">
+              Trick Area
+            </div>
+          </div>
+
+          <div id="trick-winner-banner" class="mt-2 text-xs font-bold text-amber-300 min-h-[20px] text-center"></div>
+        </div>
+
+        <!-- East: Opponent 2 -->
+        <div class="flex flex-col items-center gap-1 z-10">
+          <div class="text-[10px] font-bold text-rose-300/90 bg-black/40 px-2 py-0.5 rounded-full border border-rose-500/30">
+            <span id="east-title">East</span>
+          </div>
+          <div id="east-bid-badge" class="text-[10px] text-amber-300 font-bold"></div>
+          <div id="east-hand" class="flex flex-col -space-y-6"></div>
+        </div>
+      </div>
+
+      <!-- South: You (The Player) -->
+      <div class="w-full flex flex-col items-center gap-1.5 z-10 mt-1">
+        <div class="flex items-center justify-between w-full max-w-md px-2">
+          <div class="flex items-center gap-2">
+            <div class="text-[11px] font-bold text-emerald-200 flex items-center gap-1 bg-black/50 px-2.5 py-0.5 rounded-full border border-emerald-500/40">
+              <span id="south-title">👤 You (South)</span>
+              <span id="south-tricks-badge" class="text-emerald-400 ml-1">0 tricks</span>
+            </div>
+            <div id="south-bid-badge" class="text-[10px] text-amber-300 font-bold"></div>
+          </div>
+          <button id="btn-sort" class="text-[10px] font-semibold text-slate-300 hover:text-white bg-slate-900/80 hover:bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700 transition-colors">
+            Sort by Trump
+          </button>
+        </div>
+
+        <!-- 6 Interactive Hand Cards -->
+        <div id="player-hand" class="flex items-end justify-center -space-x-3 sm:-space-x-2 py-1 overflow-visible"></div>
+      </div>
+    </div>
+
+    <!-- Hand History Tray -->
+    <div class="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-2.5 flex flex-col gap-1.5">
+      <div class="flex items-center justify-between px-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trick History (This Hand)</span>
+        <span id="trick-count-label" class="text-[10px] text-slate-500">0 of 6 played</span>
+      </div>
+      <div id="trick-history-strip" class="w-full flex items-center gap-2 overflow-x-auto py-1 px-1 min-h-[44px]">
+        <span class="text-[11px] text-slate-500 italic px-2">No tricks completed yet</span>
+      </div>
+    </div>
+
+    <!-- Player Profile & Career Stats Modal -->
+    <div id="profile-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+      <div class="bg-slate-900 border border-slate-700 rounded-3xl p-5 max-w-sm w-full flex flex-col gap-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <h2 class="text-base font-bold text-white flex items-center gap-1.5">
+            <span>⚙️</span> Player Profile &amp; Stats
+          </h2>
+          <button id="btn-close-profile" class="text-slate-400 hover:text-white text-xs px-2 py-1 rounded bg-slate-800">✕</button>
+        </div>
+
+        <!-- Name Inputs -->
+        <div class="flex flex-col gap-3">
+          <div>
+            <label class="text-[11px] font-semibold text-slate-400 block mb-1">Your Name</label>
+            <input type="text" id="input-player-name" value="You" maxlength="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-400 block mb-1">Partner's Name</label>
+            <input type="text" id="input-partner-name" value="Partner" maxlength="15" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+
+        <!-- Career Lifetime Stats -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2">
+          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Career Match Record</span>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="p-1.5 bg-slate-900 rounded-lg">
+              <span class="text-[10px] text-slate-400 block">Wins</span>
+              <span id="stats-wins" class="text-base font-black text-emerald-400">0</span>
+            </div>
+            <div class="p-1.5 bg-slate-900 rounded-lg">
+              <span class="text-[10px] text-slate-400 block">Losses</span>
+              <span id="stats-losses" class="text-base font-black text-rose-400">0</span>
+            </div>
+            <div class="p-1.5 bg-slate-900 rounded-lg">
+              <span class="text-[10px] text-slate-400 block">Win %</span>
+              <span id="stats-winrate" class="text-base font-black text-amber-400">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="btn-save-profile" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-colors">
+          Save Settings
+        </button>
+      </div>
+    </div>
+
+    <!-- Match Victory Modal Overlay -->
+    <div id="victory-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+      <div class="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4 shadow-2xl">
+        <div class="text-5xl" id="victory-icon">🏆</div>
+        <div>
+          <h2 class="text-2xl font-black text-white" id="victory-title">Match Victory!</h2>
+          <p class="text-xs text-slate-300 mt-1" id="victory-desc">Your team reached 42 points first!</p>
+        </div>
+        <div class="w-full bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-around">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Our Score</span>
+            <span id="final-score-us" class="text-2xl font-black text-emerald-400">42</span>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Their Score</span>
+            <span id="final-score-them" class="text-2xl font-black text-rose-400">28</span>
+          </div>
+        </div>
+        <button id="btn-new-match" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition-colors">
+          Start New Match
+        </button>
+      </div>
+    </div>
+
+    <!-- Hand Summary & Explanation Card -->
+    <div class="w-full bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-xs text-slate-300 flex flex-col gap-1.5">
+      <div class="flex items-center justify-between">
+        <span class="font-bold text-white flex items-center gap-1">
+          <span>🌶️</span> Complete Pepper Edition
+        </span>
+        <span class="text-[11px] text-slate-400">Target: 42 points</span>
+      </div>
+      <p id="rule-explainer" class="text-[11px] text-slate-400 leading-relaxed">
+        <strong>The Pepper Match</strong>: Hands are played continuously until either team reaches 42 cumulative points! Review tricks in the history tray to track bowers and Aces.
+      </p>
+    </div>
+  </main>
+
+  <footer class="w-full max-w-2xl text-center py-2 text-[11px] text-slate-500">
+    Step 4 of Pepper: Custom Names, Career Stats &amp; Full Match Loop
+  </footer>
+
+  <script>
+    // --- 1. PEPPER CARD DATA (24-CARD EUCHRE DECK) ---
+    const SUITS = [
+      { name: 'Spades', symbol: '♠', color: 'text-slate-900', sameColorSuit: 'Clubs' },
+      { name: 'Hearts', symbol: '♥', color: 'text-red-600', sameColorSuit: 'Diamonds' },
+      { name: 'Clubs', symbol: '♣', color: 'text-slate-900', sameColorSuit: 'Spades' },
+      { name: 'Diamonds', symbol: '♦', color: 'text-red-600', sameColorSuit: 'Hearts' }
+    ];
+
+    const RANKS = [
+      { name: '9', display: '9', baseValue: 9 },
+      { name: '10', display: '10', baseValue: 10 },
+      { name: 'Jack', display: 'J', baseValue: 11 },
+      { name: 'Queen', display: 'Q', baseValue: 12 },
+      { name: 'King', display: 'K', baseValue: 13 },
+      { name: 'Ace', display: 'A', baseValue: 14 }
+    ];
+
+    // --- 2. GAME STATE ---
+    let trumpSuit = 'Spades';
+    let hands = { north: [], east: [], south: [], west: [] };
+    let currentTrick = [];
+    let completedTricks = [];
+    let teamTricks = { us: 0, them: 0 };
+    let matchScore = { us: 0, them: 0 };
+
+    // Player Profile & Career Stats
+    let playerName = 'You';
+    let partnerName = 'Partner';
+    let careerStats = { wins: 0, losses: 0 };
+
+    let gamePhase = 'bidding';
+    let currentHighBid = { value: 0, bidder: null, type: null, label: 'None' };
+    let auctionOrder = ['west', 'north', 'east', 'south'];
+    let auctionIndex = 0;
+    let bidsRecord = {};
+
+    let sittingOut = { north: false, south: false, east: false, west: false };
+
+    let soundEnabled = true;
+    let audioCtx = null;
+    let isPlayingTrick = false;
+
+    // --- 3. LOCAL STORAGE & STATS HELPERS ---
+    function loadProfileAndStats() {
+      try {
+        const savedPlayer = localStorage.getItem('pepper_player_name');
+        const savedPartner = localStorage.getItem('pepper_partner_name');
+        const savedWins = localStorage.getItem('pepper_wins');
+        const savedLosses = localStorage.getItem('pepper_losses');
+
+        if (savedPlayer) playerName = savedPlayer;
+        if (savedPartner) partnerName = savedPartner;
+        if (savedWins) careerStats.wins = parseInt(savedWins, 10);
+        if (savedLosses) careerStats.losses = parseInt(savedLosses, 10);
+      } catch (e) {}
+
+      updateProfileUI();
+    }
+
+    function saveProfileAndStats() {
+      try {
+        localStorage.setItem('pepper_player_name', playerName);
+        localStorage.setItem('pepper_partner_name', partnerName);
+        localStorage.setItem('pepper_wins', careerStats.wins.toString());
+        localStorage.setItem('pepper_losses', careerStats.losses.toString());
+      } catch (e) {}
+
+      updateProfileUI();
+    }
+
+    function updateProfileUI() {
+      document.getElementById('input-player-name').value = playerName;
+      document.getElementById('input-partner-name').value = partnerName;
+      document.getElementById('south-title').textContent = `👤 ${playerName} (South)`;
+      document.getElementById('north-title').textContent = `🤝 ${partnerName} (North)`;
+
+      const total = careerStats.wins + careerStats.losses;
+      const rate = total > 0 ? Math.round((careerStats.wins / total) * 100) : 0;
+
+      document.getElementById('stats-wins').textContent = careerStats.wins;
+      document.getElementById('stats-losses').textContent = careerStats.losses;
+      document.getElementById('stats-winrate').textContent = `${rate}%`;
+      document.getElementById('header-lifetime-record').textContent = `Career: ${careerStats.wins}W - ${careerStats.losses}L`;
+    }
+
+    // --- 4. CONFETTI CELEBRATION ENGINE ---
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    let confettiCtx = confettiCanvas.getContext('2d');
+    let confettiParticles = [];
+    let confettiAnimId = null;
+
+    function resizeConfetti() {
+      confettiCanvas.width = window.innerWidth;
+      confettiCanvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeConfetti);
+    resizeConfetti();
+
+    function fireVictoryConfetti() {
+      confettiParticles = [];
+      const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6'];
+      for (let i = 0; i < 90; i++) {
+        confettiParticles.push({
+          x: confettiCanvas.width / 2,
+          y: confettiCanvas.height / 3,
+          vx: (Math.random() - 0.5) * 14,
+          vy: (Math.random() - 0.8) * 16,
+          size: Math.random() * 7 + 4,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rotation: Math.random() * 360,
+          rotSpeed: (Math.random() - 0.5) * 12,
+          alpha: 1
+        });
+      }
+      if (confettiAnimId) cancelAnimationFrame(confettiAnimId);
+
+      function step() {
+        confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+        let alive = 0;
+        for (const p of confettiParticles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.35;
+          p.rotation += p.rotSpeed;
+          p.alpha -= 0.012;
+          if (p.alpha > 0) {
+            alive++;
+            confettiCtx.save();
+            confettiCtx.translate(p.x, p.y);
+            confettiCtx.rotate((p.rotation * Math.PI) / 180);
+            confettiCtx.globalAlpha = Math.max(0, p.alpha);
+            confettiCtx.fillStyle = p.color;
+            confettiCtx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 1.4);
+            confettiCtx.restore();
+          }
+        }
+        if (alive > 0) confettiAnimId = requestAnimationFrame(step);
+        else confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      }
+      confettiAnimId = requestAnimationFrame(step);
+    }
+
+    // --- 5. DOM REFERENCES ---
+    const playerHandEl = document.getElementById('player-hand');
+    const northHandEl = document.getElementById('north-hand');
+    const eastHandEl = document.getElementById('east-hand');
+    const westHandEl = document.getElementById('west-hand');
+    const northTitleEl = document.getElementById('north-title');
+    const eastTitleEl = document.getElementById('east-title');
+    const westTitleEl = document.getElementById('west-title');
+    const bowerTextEl = document.getElementById('bower-text');
+    const ruleExplainerEl = document.getElementById('rule-explainer');
+    const trickStatusEl = document.getElementById('trick-status');
+    const trickWinnerBannerEl = document.getElementById('trick-winner-banner');
+    const trickEmptyEl = document.getElementById('trick-empty');
+    const trickArenaEl = document.getElementById('trick-arena');
+    const biddingPanelEl = document.getElementById('bidding-panel');
+    const exchangeChoicePanelEl = document.getElementById('exchange-choice-panel');
+    const surrenderPanelEl = document.getElementById('surrender-panel');
+    const surrenderPromptEl = document.getElementById('surrender-prompt');
+    const contractTitleEl = document.getElementById('contract-title');
+    const contractDescEl = document.getElementById('contract-desc');
+    const biddingPillEl = document.getElementById('bidding-pill');
+    const matchScoreUsEl = document.getElementById('match-score-us');
+    const matchScoreThemEl = document.getElementById('match-score-them');
+    const trickHistoryStripEl = document.getElementById('trick-history-strip');
+    const trickCountLabelEl = document.getElementById('trick-count-label');
+    const victoryModalEl = document.getElementById('victory-modal');
+    const victoryIconEl = document.getElementById('victory-icon');
+    const victoryTitleEl = document.getElementById('victory-title');
+    const victoryDescEl = document.getElementById('victory-desc');
+    const finalScoreUsEl = document.getElementById('final-score-us');
+    const finalScoreThemEl = document.getElementById('final-score-them');
+    const profileModalEl = document.getElementById('profile-modal');
+    const btnProfile = document.getElementById('btn-profile');
+    const btnCloseProfile = document.getElementById('btn-close-profile');
+    const btnSaveProfile = document.getElementById('btn-save-profile');
+    const btnNewMatch = document.getElementById('btn-new-match');
+    const btnDeal = document.getElementById('btn-deal');
+    const btnSort = document.getElementById('btn-sort');
+    const btnSound = document.getElementById('btn-sound');
+    const soundLabel = document.getElementById('sound-label');
+    const southTricksBadge = document.getElementById('south-tricks-badge');
+    const northTricksBadge = document.getElementById('north-tricks-badge');
+    const trumpButtons = document.querySelectorAll('.trump-btn');
+    const bidButtons = document.querySelectorAll('.bid-btn');
+    const btnChallenge = document.getElementById('btn-challenge');
+    const btnSurrender = document.getElementById('btn-surrender');
+    const btnDoExchange = document.getElementById('btn-do-exchange');
+    const btnSkipExchange = document.getElementById('btn-skip-exchange');
+
+    const bidBadges = {
+      north: document.getElementById('north-bid-badge'),
+      east: document.getElementById('east-bid-badge'),
+      south: document.getElementById('south-bid-badge'),
+      west: document.getElementById('west-bid-badge')
+    };
+
+    const trickSlots = {
+      north: document.getElementById('trick-north'),
+      east: document.getElementById('trick-east'),
+      south: document.getElementById('trick-south'),
+      west: document.getElementById('trick-west')
+    };
+
+    // --- 6. WEB AUDIO SYNTHESIZER ---
+    function playTone(freq, duration, type = 'sine') {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) audioCtx = new AudioContextClass();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // --- 7. BOWER & TRUMP POWER LOGIC ---
+    function evaluateCard(card, currentTrump) {
+      if (currentTrump === 'No Trump') {
+        return { effectiveSuit: card.suit.name, power: card.rank.baseValue, bower: null };
+      }
+
+      const trumpObj = SUITS.find(s => s.name === currentTrump);
+      const isRightBower = (card.suit.name === currentTrump && card.rank.name === 'Jack');
+      const isLeftBower = (card.suit.name === trumpObj.sameColorSuit && card.rank.name === 'Jack');
+
+      if (isRightBower) {
+        return { effectiveSuit: currentTrump, power: 30, bower: 'Right Bower' };
+      }
+      if (isLeftBower) {
+        return { effectiveSuit: currentTrump, power: 25, bower: 'Left Bower' };
+      }
+      if (card.suit.name === currentTrump) {
+        return { effectiveSuit: currentTrump, power: 15 + card.rank.baseValue, bower: null };
+      }
+      return { effectiveSuit: card.suit.name, power: card.rank.baseValue, bower: null };
+    }
+
+    // --- 8. AUCTION & BID EVALUATION ENGINE ---
+    function evaluateHandForBidding(hand) {
+      let bestSuit = 'Spades';
+      let maxScore = 0;
+
+      for (const suit of SUITS) {
+        let score = 0;
+        hand.forEach(card => {
+          const evalInfo = evaluateCard(card, suit.name);
+          if (evalInfo.effectiveSuit === suit.name) {
+            if (evalInfo.bower === 'Right Bower') score += 3.5;
+            else if (evalInfo.bower === 'Left Bower') score += 3;
+            else if (card.rank.name === 'Ace') score += 2;
+            else if (card.rank.name === 'King') score += 1.5;
+            else score += 1;
+          } else if (card.rank.name === 'Ace') {
+            score += 1.5;
+          }
+        });
+        if (score > maxScore) {
+          maxScore = score;
+          bestSuit = suit.name;
+        }
+      }
+
+      let proposedBid = 0;
+      if (maxScore >= 11) proposedBid = 6;
+      else if (maxScore >= 9) proposedBid = 5;
+      else if (maxScore >= 7) proposedBid = 4;
+      else if (maxScore >= 5.5) proposedBid = 3;
+      else if (maxScore >= 4) proposedBid = 2;
+      else if (maxScore >= 3) proposedBid = 1;
+
+      return { proposedBid, bestSuit };
+    }
+
+    function startAuction() {
+      gamePhase = 'bidding';
+      currentHighBid = { value: 0, bidder: null, type: null, label: 'None' };
+      auctionIndex = 0;
+      bidsRecord = {};
+      completedTricks = [];
+      renderTrickHistory();
+      sittingOut = { north: false, south: false, east: false, west: false };
+      Object.values(bidBadges).forEach(el => el.textContent = '');
+
+      northTitleEl.textContent = `🤝 ${partnerName} (North)`;
+      westTitleEl.textContent = 'West';
+      eastTitleEl.textContent = 'East';
+
+      contractTitleEl.textContent = 'Phase: Bidding';
+      contractDescEl.textContent = 'Players bidding around table in turn...';
+      biddingPillEl.textContent = 'High Bid: None';
+
+      biddingPanelEl.classList.add('hidden');
+      exchangeChoicePanelEl.classList.add('hidden');
+      surrenderPanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+
+      advanceAuction();
+    }
+
+    function advanceAuction() {
+      if (auctionIndex < auctionOrder.length) {
+        const currentSeat = auctionOrder[auctionIndex];
+        if (currentSeat === 'south') {
+          trickStatusEl.textContent = 'Your turn to bid! Pass or choose a bid to take contract.';
+          showPlayerBiddingPanel();
+        } else {
+          trickStatusEl.textContent = `${formatPlayerName(currentSeat)} is bidding...`;
+          setTimeout(() => {
+            handleAIBid(currentSeat);
+            auctionIndex++;
+            advanceAuction();
+          }, 500);
+        }
+      } else {
+        finishAuction();
+      }
+    }
+
+    function formatPlayerName(seat) {
+      if (seat === 'south') return playerName;
+      if (seat === 'north') return partnerName;
+      if (seat === 'west') return 'West';
+      if (seat === 'east') return 'East';
+      return seat;
+    }
+
+    function handleAIBid(seat) {
+      const evalResult = evaluateHandForBidding(hands[seat]);
+      let bidVal = evalResult.proposedBid;
+
+      if (bidVal > currentHighBid.value) {
+        currentHighBid = {
+          value: bidVal,
+          bidder: seat,
+          type: 'number',
+          label: `${bidVal}`,
+          suit: evalResult.bestSuit
+        };
+        bidsRecord[seat] = `${bidVal}`;
+        bidBadges[seat].textContent = `Bid: ${bidVal}`;
+        biddingPillEl.textContent = `High: ${bidVal} (${formatPlayerName(seat)})`;
+        playTone(392, 0.1, 'sine');
+      } else {
+        bidsRecord[seat] = 'Pass';
+        bidBadges[seat].textContent = 'Pass';
+      }
+    }
+
+    function showPlayerBiddingPanel() {
+      biddingPanelEl.classList.remove('hidden');
+      trickArenaEl.classList.add('hidden');
+
+      bidButtons.forEach(btn => {
+        const bidType = btn.dataset.bid;
+        if (bidType === 'pass') {
+          btn.disabled = false;
+        } else if (bidType === 'little-pepper') {
+          btn.disabled = (currentHighBid.value >= 7);
+        } else if (bidType === 'big-pepper') {
+          btn.disabled = (currentHighBid.value >= 14);
+        } else {
+          const num = parseInt(bidType, 10);
+          btn.disabled = (num <= currentHighBid.value);
+          if (btn.disabled) {
+            btn.className = 'bid-btn py-1.5 px-2 bg-slate-900 text-slate-600 text-xs font-bold rounded-lg border border-slate-800 cursor-not-allowed';
+          } else {
+            btn.className = 'bid-btn py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700';
+          }
+        }
+      });
+    }
+
+    function handlePlayerBid(bidChoice) {
+      biddingPanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+
+      if (bidChoice === 'pass') {
+        bidsRecord.south = 'Pass';
+        bidBadges.south.textContent = 'Pass';
+      } else if (bidChoice === 'little-pepper') {
+        currentHighBid = { value: 7, bidder: 'south', type: 'little-pepper', label: 'Little Pepper' };
+        bidsRecord.south = 'Little Pepper';
+        bidBadges.south.textContent = 'Little Pepper';
+        biddingPillEl.textContent = `High: Little Pepper (${playerName})`;
+        playTone(587.33, 0.2, 'sine');
+      } else if (bidChoice === 'big-pepper') {
+        currentHighBid = { value: 14, bidder: 'south', type: 'big-pepper', label: 'Big Pepper' };
+        bidsRecord.south = 'Big Pepper';
+        bidBadges.south.textContent = 'Big Pepper';
+        biddingPillEl.textContent = `High: Big Pepper (${playerName})`;
+        playTone(659.25, 0.25, 'sine');
+      } else {
+        const num = parseInt(bidChoice, 10);
+        currentHighBid = { value: num, bidder: 'south', type: 'number', label: `${num}` };
+        bidsRecord.south = `${num}`;
+        bidBadges.south.textContent = `Bid: ${num}`;
+        biddingPillEl.textContent = `High: ${num} (${playerName})`;
+        playTone(493.88, 0.15, 'sine');
+      }
+
+      auctionIndex++;
+      advanceAuction();
+    }
+
+    function finishAuction() {
+      if (currentHighBid.value === 0) {
+        currentHighBid = { value: 1, bidder: 'south', type: 'number', label: '1 (Stick)' };
+        bidBadges.south.textContent = 'Bid: 1';
+        biddingPillEl.textContent = 'High: 1 (Stuck)';
+        trickStatusEl.textContent = 'All passed! Dealer stuck with 1.';
+      }
+
+      contractTitleEl.textContent = `Contract: ${currentHighBid.label} by ${formatPlayerName(currentHighBid.bidder)}`;
+      
+      if (currentHighBid.type === 'big-pepper') {
+        if (currentHighBid.bidder === 'south') {
+          sittingOut.north = true;
+          northTitleEl.textContent = `💤 ${partnerName} (Sitting Out)`;
+        } else if (currentHighBid.bidder === 'west') {
+          sittingOut.east = true;
+          eastTitleEl.textContent = '💤 East (Sitting Out)';
+        } else if (currentHighBid.bidder === 'east') {
+          sittingOut.west = true;
+          westTitleEl.textContent = '💤 West (Sitting Out)';
+        } else if (currentHighBid.bidder === 'north') {
+          sittingOut.south = true;
+        }
+      }
+
+      if (currentHighBid.bidder === 'south') {
+        gamePhase = 'trump_selection';
+        trickStatusEl.textContent = '🎉 You won the contract! Choose the Trump suit above.';
+        contractDescEl.textContent = 'Pick trump at top to finalize contract.';
+        playTone(523.25, 0.2, 'triangle');
+      } else {
+        const aiTrump = currentHighBid.suit || hands[currentHighBid.bidder][0].suit.name;
+        trumpSuit = aiTrump;
+        sortSouthHand();
+        renderAllHands();
+        updateBowerGuide();
+        handlePostTrumpFlow();
+      }
+    }
+
+    // --- 9. CARD EXCHANGE & GO ALONE FLOW ---
+    function handlePostTrumpFlow() {
+      if (currentHighBid.type === 'big-pepper') {
+        promptSurrenderPhase();
+        return;
+      }
+
+      if (currentHighBid.bidder === 'south') {
+        gamePhase = 'exchange_choice';
+        trickArenaEl.classList.add('hidden');
+        exchangeChoicePanelEl.classList.remove('hidden');
+        trickStatusEl.textContent = 'Choose whether to exchange a card with Partner:';
+      } else if (currentHighBid.bidder === 'north') {
+        trickStatusEl.textContent = `${partnerName} is swapping an unwanted card with you...`;
+        setTimeout(() => {
+          executePartnerAIExchange();
+        }, 800);
+      } else if (currentHighBid.bidder === 'west' || currentHighBid.bidder === 'east') {
+        const bidder = currentHighBid.bidder;
+        const oppPartner = (bidder === 'west') ? 'east' : 'west';
+        sittingOut[oppPartner] = true;
+        if (oppPartner === 'west') westTitleEl.textContent = '💤 West (Sitting Out)';
+        if (oppPartner === 'east') eastTitleEl.textContent = '💤 East (Sitting Out)';
+        trickStatusEl.textContent = `${formatPlayerName(bidder)} swapped cards with their partner (sitting out).`;
+        setTimeout(() => {
+          promptSurrenderPhase();
+        }, 800);
+      } else {
+        promptSurrenderPhase();
+      }
+    }
+
+    function startPlayerCardDiscard() {
+      exchangeChoicePanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+      gamePhase = 'discard_for_exchange';
+      trickStatusEl.textContent = '👇 Click 1 card in your hand to discard and swap with Partner!';
+      contractDescEl.textContent = `Discard 1 card. ${partnerName} will give you their best card!`;
+    }
+
+    function executePlayerExchange(discardIndex) {
+      const discardedCard = hands.south.splice(discardIndex, 1)[0];
+      
+      hands.north.sort((a, b) => evaluateCard(b, trumpSuit).power - evaluateCard(a, trumpSuit).power);
+      const passedCard = hands.north.shift();
+
+      hands.south.push(passedCard);
+      sittingOut.north = true;
+      northTitleEl.textContent = `💤 ${partnerName} (Sitting Out)`;
+      hands.north = [];
+
+      sortSouthHand();
+      renderAllHands();
+      playTone(587.33, 0.25, 'triangle');
+
+      trickWinnerBannerEl.textContent = `🔄 ${partnerName} passed you ${passedCard.rank.display} of ${passedCard.suit.name}! Sitting out.`;
+      
+      setTimeout(() => {
+        promptSurrenderPhase();
+      }, 1400);
+    }
+
+    function skipPlayerExchange() {
+      exchangeChoicePanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+      sittingOut.north = false;
+      trickStatusEl.textContent = `Playing together with ${partnerName} (all 4 players active).`;
+      promptSurrenderPhase();
+    }
+
+    function executePartnerAIExchange() {
+      hands.south.sort((a, b) => evaluateCard(b, trumpSuit).power - evaluateCard(a, trumpSuit).power);
+      const cardToPartner = hands.south.shift();
+      hands.north.push(cardToPartner);
+      
+      sittingOut.south = true;
+      hands.south = [];
+      renderAllHands();
+
+      trickWinnerBannerEl.textContent = `You passed ${cardToPartner.rank.display} of ${cardToPartner.suit.name} to ${partnerName}! You sit out.`;
+      setTimeout(() => {
+        promptSurrenderPhase();
+      }, 1400);
+    }
+
+    // --- 10. SURRENDER PHASE ---
+    function promptSurrenderPhase() {
+      gamePhase = 'surrender_choice';
+      const bidderIsUs = (currentHighBid.bidder === 'south' || currentHighBid.bidder === 'north');
+
+      if (!bidderIsUs) {
+        contractDescEl.textContent = `Opponents bid ${currentHighBid.label} in ${trumpSuit}. Surrender or Challenge?`;
+        trickStatusEl.textContent = 'Choose whether to Challenge or Surrender:';
+        surrenderPromptEl.textContent = `Opponents bid ${currentHighBid.label} in ${trumpSuit}!`;
+        surrenderPanelEl.classList.remove('hidden');
+        trickArenaEl.classList.add('hidden');
+      } else {
+        trickStatusEl.textContent = 'Opponents deciding whether to Surrender or Challenge...';
+        setTimeout(() => {
+          const oppScore = evaluateHandForBidding(hands.west).proposedBid + evaluateHandForBidding(hands.east).proposedBid;
+          const willSurrender = (currentHighBid.value >= 4 && oppScore <= 2);
+
+          if (willSurrender) {
+            handleOpponentsSurrender();
+          } else {
+            trickStatusEl.textContent = '⚔️ Opponents accepted the challenge!';
+            contractDescEl.textContent = 'Opponents chose to play!';
+            startTrickPlayingPhase();
+          }
+        }, 800);
+      }
+    }
+
+    function handleOpponentsSurrender() {
+      trickStatusEl.textContent = '🏳️ Opponents Surrendered! Hand ends immediately.';
+      contractDescEl.textContent = `Bidder awarded +${currentHighBid.value} points. Opponents score 0.`;
+      matchScore.us += currentHighBid.value;
+      updateScoreboardUI();
+      playTone(587.33, 0.3, 'triangle');
+      trickWinnerBannerEl.textContent = `Hand won by surrender (+${currentHighBid.value} pts to Us). Deal again!`;
+      gamePhase = 'hand_over';
+      checkMatchWinner();
+    }
+
+    function handlePlayerSurrender() {
+      surrenderPanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+      trickStatusEl.textContent = '🏳️ Your team Surrendered. Opponents win the bid without risk.';
+      contractDescEl.textContent = `Opponents score +${currentHighBid.value}. Your team scores 0.`;
+      matchScore.them += currentHighBid.value;
+      updateScoreboardUI();
+      trickWinnerBannerEl.textContent = `Hand ended (+${currentHighBid.value} pts to Them). Deal new hand!`;
+      gamePhase = 'hand_over';
+      checkMatchWinner();
+    }
+
+    function handlePlayerChallenge() {
+      surrenderPanelEl.classList.add('hidden');
+      trickArenaEl.classList.remove('hidden');
+      trickStatusEl.textContent = '⚔️ Challenge accepted!';
+      contractDescEl.textContent = `Contract: ${currentHighBid.label} in ${trumpSuit}. Defend to set them!`;
+      startTrickPlayingPhase();
+    }
+
+    function startTrickPlayingPhase() {
+      gamePhase = 'playing';
+      resetTrickDisplay();
+      if (!sittingOut.south) {
+        trickStatusEl.textContent = `Lead Trick 1 with any card! Contract is ${currentHighBid.label} in ${trumpSuit}.`;
+      } else {
+        trickStatusEl.textContent = `You are sitting out! AI playing out the tricks...`;
+        setTimeout(playAITrickWhenSouthSittingOut, 1000);
+      }
+    }
+
+    // --- 11. DECK CREATION & DEALING ---
+    function dealPepperHands() {
+      const deck = [];
+      for (const suit of SUITS) {
+        for (const rank of RANKS) {
+          deck.push({ suit, rank, id: `${rank.name}_of_${suit.name}` });
+        }
+      }
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+
+      hands.south = deck.slice(0, 6);
+      hands.west = deck.slice(6, 12);
+      hands.north = deck.slice(12, 18);
+      hands.east = deck.slice(18, 24);
+
+      teamTricks = { us: 0, them: 0 };
+      currentTrick = [];
+      isPlayingTrick = false;
+
+      resetTrickDisplay();
+      sortSouthHand();
+      renderAllHands();
+      updateBowerGuide();
+      updateScoreboardUI();
+
+      startAuction();
+    }
+
+    function sortSouthHand() {
+      hands.south.sort((a, b) => {
+        const evalA = evaluateCard(a, trumpSuit);
+        const evalB = evaluateCard(b, trumpSuit);
+        if (evalA.effectiveSuit === trumpSuit && evalB.effectiveSuit !== trumpSuit) return -1;
+        if (evalB.effectiveSuit === trumpSuit && evalA.effectiveSuit !== trumpSuit) return 1;
+        if (evalA.effectiveSuit === evalB.effectiveSuit) {
+          return evalB.power - evalA.power;
+        }
+        return a.suit.name.localeCompare(b.suit.name);
+      });
+    }
+
+    function updateScoreboardUI() {
+      matchScoreUsEl.textContent = matchScore.us;
+      matchScoreThemEl.textContent = matchScore.them;
+      southTricksBadge.textContent = `${teamTricks.us} tricks`;
+      northTricksBadge.textContent = `Team: ${teamTricks.us}`;
+    }
+
+    // --- 12. RENDERING HANDS & CARDS ---
+    function renderAllHands() {
+      playerHandEl.innerHTML = '';
+      if (sittingOut.south) {
+        playerHandEl.innerHTML = '<span class="text-xs text-amber-300 font-bold py-4">💤 You are Sitting Out this hand</span>';
+      } else {
+        hands.south.forEach((card, index) => {
+          const evalInfo = evaluateCard(card, trumpSuit);
+          const isTrump = evalInfo.effectiveSuit === trumpSuit;
+          const cardBtn = document.createElement('button');
+          cardBtn.className = `group relative w-16 sm:w-20 h-24 sm:h-28 bg-white rounded-xl p-2 flex flex-col justify-between card-shadow transition-all duration-200 hover:-translate-y-3 hover:scale-105 active:scale-95 cursor-pointer border-2 ${isTrump ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-slate-200'}`;
+          cardBtn.dataset.index = index;
+
+          let bowerBadge = '';
+          if (evalInfo.bower) {
+            bowerBadge = `<div class="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter whitespace-nowrap shadow">${evalInfo.bower === 'Right Bower' ? '★ Right' : '★ Left'}</div>`;
+          }
+
+          const suitColor = card.suit.color;
+          cardBtn.innerHTML = `
+            ${bowerBadge}
+            <div class="text-left leading-none">
+              <span class="text-xs sm:text-sm font-black ${suitColor}">${card.rank.display}</span>
+              <span class="text-xs ${suitColor}">${card.suit.symbol}</span>
+            </div>
+            <div class="text-center text-2xl sm:text-3xl leading-none ${suitColor} py-1">
+              ${card.suit.symbol}
+            </div>
+            <div class="text-right leading-none rotate-180">
+              <span class="text-xs sm:text-sm font-black ${suitColor}">${card.rank.display}</span>
+              <span class="text-xs ${suitColor}">${card.suit.symbol}</span>
+            </div>
+          `;
+
+          cardBtn.addEventListener('click', () => {
+            if (gamePhase === 'discard_for_exchange') {
+              executePlayerExchange(index);
+            } else if (gamePhase === 'playing' && !isPlayingTrick && hands.south.length > 0) {
+              playCardFromSouth(index);
+            }
+          });
+
+          playerHandEl.appendChild(cardBtn);
+        });
+      }
+
+      northHandEl.innerHTML = '';
+      if (sittingOut.north) {
+        northHandEl.innerHTML = '<span class="text-[10px] text-amber-300 italic">Folded (Sitting Out)</span>';
+      } else {
+        for (let i = 0; i < hands.north.length; i++) {
+          const back = document.createElement('div');
+          back.className = 'w-7 h-10 card-back rounded-md card-shadow flex-shrink-0';
+          northHandEl.appendChild(back);
+        }
+      }
+
+      westHandEl.innerHTML = '';
+      if (sittingOut.west) {
+        westHandEl.innerHTML = '<span class="text-[9px] text-amber-300 italic">Folded</span>';
+      } else {
+        for (let i = 0; i < hands.west.length; i++) {
+          const back = document.createElement('div');
+          back.className = 'w-10 h-7 card-back rounded-md card-shadow flex-shrink-0';
+          westHandEl.appendChild(back);
+        }
+      }
+
+      eastHandEl.innerHTML = '';
+      if (sittingOut.east) {
+        eastHandEl.innerHTML = '<span class="text-[9px] text-amber-300 italic">Folded</span>';
+      } else {
+        for (let i = 0; i < hands.east.length; i++) {
+          const back = document.createElement('div');
+          back.className = 'w-10 h-7 card-back rounded-md card-shadow flex-shrink-0';
+          eastHandEl.appendChild(back);
+        }
+      }
+
+      updateScoreboardUI();
+    }
+
+    function updateBowerGuide() {
+      trumpButtons.forEach(btn => {
+        if (btn.dataset.trump === trumpSuit) {
+          btn.className = 'trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400';
+        } else {
+          btn.className = 'trump-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700';
+        }
+      });
+
+      if (trumpSuit === 'No Trump') {
+        bowerTextEl.innerHTML = '<span>No Trump: Aces are high, Jacks play as standard ranks.</span>';
+        ruleExplainerEl.innerHTML = 'Playing in <strong>No Trump</strong>: No suit is trump. The highest card of the suit led wins each trick (Ace is high).';
+        return;
+      }
+
+      const trumpObj = SUITS.find(s => s.name === trumpSuit);
+      const sameColorSuit = trumpObj.sameColorSuit;
+      bowerTextEl.innerHTML = `<span>Right Bower: <strong>J${trumpObj.symbol}</strong> &bull; Left Bower: <strong>J${SUITS.find(s=>s.name===sameColorSuit).symbol}</strong></span>`;
+      ruleExplainerEl.innerHTML = `With <strong class="text-emerald-400">${trumpSuit}</strong> as trump: The <strong class="text-amber-400">Jack of ${trumpSuit} (Right Bower)</strong> is #1. The <strong class="text-amber-300">Jack of ${sameColorSuit} (Left Bower)</strong> is #2 and legally belongs to ${trumpSuit}!`;
+    }
+
+    // --- 13. ADVANCED TRICK-TAKING & SMARTER AI ---
+    function resetTrickDisplay() {
+      Object.values(trickSlots).forEach(slot => {
+        slot.classList.add('hidden');
+        slot.innerHTML = '';
+      });
+      trickEmptyEl.classList.remove('hidden');
+      trickWinnerBannerEl.textContent = '';
+    }
+
+    function renderCardInSlot(slotEl, card, bowerTag) {
+      slotEl.classList.remove('hidden');
+      trickEmptyEl.classList.add('hidden');
+      const suitColor = card.suit.color;
+      let tag = bowerTag ? `<div class="text-[8px] bg-amber-500 text-slate-900 font-bold px-1 rounded-full">${bowerTag === 'Right Bower' ? 'Right' : 'Left'}</div>` : '';
+      slotEl.innerHTML = `
+        <div class="flex items-center justify-between w-full leading-none">
+          <span class="font-bold ${suitColor}">${card.rank.display}</span>
+          <span class="${suitColor}">${card.suit.symbol}</span>
+        </div>
+        <div class="text-xl ${suitColor} leading-none">${card.suit.symbol}</div>
+        ${tag}
+      `;
+    }
+
+    function pickAICard(aiHand, leadSuit, seat) {
+      if (!leadSuit) {
+        const isContractor = (seat === currentHighBid.bidder);
+        if (isContractor) {
+          const trumps = aiHand.map((c, i) => ({ card: c, idx: i, eval: evaluateCard(c, trumpSuit) }))
+                               .filter(x => x.eval.effectiveSuit === trumpSuit);
+          if (trumps.length > 0) {
+            trumps.sort((a, b) => b.eval.power - a.eval.power);
+            return aiHand.splice(trumps[0].idx, 1)[0];
+          }
+        }
+        const nonTrumps = aiHand.map((c, i) => ({ card: c, idx: i, eval: evaluateCard(c, trumpSuit) }))
+                                .filter(x => x.eval.effectiveSuit !== trumpSuit);
+        if (nonTrumps.length > 0) {
+          nonTrumps.sort((a, b) => b.eval.power - a.eval.power);
+          return aiHand.splice(nonTrumps[0].idx, 1)[0];
+        }
+        return aiHand.splice(0, 1)[0];
+      }
+
+      const matching = [];
+      const trumps = [];
+      const discards = [];
+
+      aiHand.forEach((c, idx) => {
+        const evalInfo = evaluateCard(c, trumpSuit);
+        if (evalInfo.effectiveSuit === leadSuit) matching.push({ card: c, index: idx, power: evalInfo.power });
+        else if (evalInfo.effectiveSuit === trumpSuit) trumps.push({ card: c, index: idx, power: evalInfo.power });
+        else discards.push({ card: c, index: idx, power: evalInfo.power });
+      });
+
+      if (matching.length > 0) {
+        matching.sort((a, b) => b.power - a.power);
+        return aiHand.splice(matching[0].index, 1)[0];
+      }
+
+      if (trumps.length > 0 && leadSuit !== trumpSuit) {
+        trumps.sort((a, b) => a.power - b.power);
+        return aiHand.splice(trumps[0].index, 1)[0];
+      }
+
+      discards.sort((a, b) => a.power - b.power);
+      if (discards.length > 0) return aiHand.splice(discards[0].index, 1)[0];
+
+      return aiHand.splice(0, 1)[0];
+    }
+
+    function playCardFromSouth(index) {
+      isPlayingTrick = true;
+      const card = hands.south.splice(index, 1)[0];
+      const evalInfo = evaluateCard(card, trumpSuit);
+      const leadSuit = evalInfo.effectiveSuit;
+
+      currentTrick = [{ player: 'south', card, power: evalInfo.power, suit: leadSuit }];
+      renderCardInSlot(trickSlots.south, card, evalInfo.bower);
+      renderAllHands();
+      playTone(440, 0.12, 'sine');
+
+      trickStatusEl.textContent = `You led ${card.rank.display} of ${card.suit.name}.`;
+
+      advanceTrickSequence(leadSuit, ['west', 'north', 'east']);
+    }
+
+    function advanceTrickSequence(leadSuit, remainingSeats) {
+      if (remainingSeats.length === 0) {
+        resolveTrick(leadSuit);
+        return;
+      }
+
+      const seat = remainingSeats.shift();
+      if (sittingOut[seat] || hands[seat].length === 0) {
+        advanceTrickSequence(leadSuit, remainingSeats);
+        return;
+      }
+
+      setTimeout(() => {
+        const aiCard = pickAICard(hands[seat], leadSuit, seat);
+        const aiEval = evaluateCard(aiCard, trumpSuit);
+        currentTrick.push({ player: seat, card: aiCard, power: aiEval.power, suit: aiEval.effectiveSuit });
+        renderCardInSlot(trickSlots[seat], aiCard, aiEval.bower);
+        renderAllHands();
+        playTone(392, 0.1, 'sine');
+
+        advanceTrickSequence(leadSuit, remainingSeats);
+      }, 350);
+    }
+
+    function playAITrickWhenSouthSittingOut() {
+      if (hands.west.length === 0) {
+        evaluateHandScore();
+        return;
+      }
+      const northCard = pickAICard(hands.north, null, 'north');
+      const northEval = evaluateCard(northCard, trumpSuit);
+      const leadSuit = northEval.effectiveSuit;
+      currentTrick = [{ player: 'north', card: northCard, power: northEval.power, suit: leadSuit }];
+      renderCardInSlot(trickSlots.north, northCard, northEval.bower);
+      renderAllHands();
+      playTone(440, 0.12, 'sine');
+
+      advanceTrickSequence(leadSuit, ['east', 'west']);
+    }
+
+    function resolveTrick(leadSuit) {
+      let winningPlay = currentTrick[0];
+
+      for (let i = 1; i < currentTrick.length; i++) {
+        const candidate = currentTrick[i];
+        const isCandidateTrump = candidate.suit === trumpSuit;
+        const isWinnerTrump = winningPlay.suit === trumpSuit;
+
+        if (isCandidateTrump && !isWinnerTrump) {
+          winningPlay = candidate;
+        } else if (isCandidateTrump && isWinnerTrump) {
+          if (candidate.power > winningPlay.power) winningPlay = candidate;
+        } else if (!isCandidateTrump && !isWinnerTrump) {
+          if (candidate.suit === leadSuit && candidate.power > winningPlay.power) {
+            winningPlay = candidate;
+          }
+        }
+      }
+
+      const winnerNames = {
+        south: playerName,
+        north: partnerName,
+        west: 'West',
+        east: 'East'
+      };
+
+      const weWon = (winningPlay.player === 'south' || winningPlay.player === 'north');
+      if (weWon) {
+        teamTricks.us += 1;
+        playTone(659.25, 0.25, 'triangle');
+        trickWinnerBannerEl.textContent = `🎉 Trick won by ${winnerNames[winningPlay.player]}!`;
+      } else {
+        teamTricks.them += 1;
+        playTone(261.63, 0.25, 'sawtooth');
+        trickWinnerBannerEl.textContent = `Opponents took trick (${winnerNames[winningPlay.player]}).`;
+      }
+
+      completedTricks.push({
+        winner: winnerNames[winningPlay.player],
+        weWon,
+        winningCard: winningPlay.card,
+        cards: [...currentTrick]
+      });
+      renderTrickHistory();
+      updateScoreboardUI();
+
+      setTimeout(() => {
+        const cardsLeft = sittingOut.south ? hands.north.length : hands.south.length;
+        if (cardsLeft > 0) {
+          resetTrickDisplay();
+          isPlayingTrick = false;
+          trickStatusEl.textContent = `Trick ${7 - cardsLeft} of 6: ${sittingOut.south ? 'Playing next trick...' : 'Click any card to play!'}`;
+          if (sittingOut.south) {
+            setTimeout(playAITrickWhenSouthSittingOut, 800);
+          }
+        } else {
+          evaluateHandScore();
+        }
+      }, 1600);
+    }
+
+    // --- 14. TRICK HISTORY TRAY RENDERING ---
+    function renderTrickHistory() {
+      trickCountLabelEl.textContent = `${completedTricks.length} of 6 played`;
+      if (completedTricks.length === 0) {
+        trickHistoryStripEl.innerHTML = '<span class="text-[11px] text-slate-500 italic px-2">No tricks completed yet</span>';
+        return;
+      }
+      trickHistoryStripEl.innerHTML = '';
+      completedTricks.forEach((trick, idx) => {
+        const item = document.createElement('div');
+        item.className = `flex-shrink-0 px-2 py-1 rounded-lg border flex items-center gap-1.5 text-[11px] font-semibold ${trick.weWon ? 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300' : 'bg-rose-950/80 border-rose-700/60 text-rose-300'}`;
+        item.innerHTML = `
+          <span>T${idx + 1}:</span>
+          <span class="font-bold">${trick.winningCard.rank.display}${trick.winningCard.suit.symbol}</span>
+          <span class="text-[9px] opacity-80">(${trick.winner.split(' ')[0]})</span>
+        `;
+        trickHistoryStripEl.appendChild(item);
+      });
+    }
+
+    // --- 15. MATCH SCORING & VICTORY LOGIC ---
+    function evaluateHandScore() {
+      const bidderIsUs = (currentHighBid.bidder === 'south' || currentHighBid.bidder === 'north');
+      const bidderTricks = bidderIsUs ? teamTricks.us : teamTricks.them;
+      const defendersTricks = bidderIsUs ? teamTricks.them : teamTricks.us;
+      const contractTarget = currentHighBid.value;
+
+      let resultMsg = '';
+
+      if (currentHighBid.type === 'little-pepper' || currentHighBid.type === 'big-pepper') {
+        const pepperVal = (currentHighBid.type === 'big-pepper') ? 14 : 7;
+        if (bidderTricks === 6) {
+          if (bidderIsUs) {
+            matchScore.us += pepperVal;
+            matchScore.them -= pepperVal;
+            resultMsg = `🔥 PEPPER MADE! +${pepperVal} to Us, -${pepperVal} to Opponents!`;
+          } else {
+            matchScore.them += pepperVal;
+            matchScore.us -= pepperVal;
+            resultMsg = `Opponents made Pepper! +${pepperVal} to Them, -${pepperVal} to Us.`;
+          }
+        } else {
+          if (bidderIsUs) {
+            matchScore.us -= pepperVal;
+            matchScore.them += pepperVal;
+            resultMsg = `💔 PEPPER SET! -${pepperVal} to Us, +${pepperVal} to Opponents.`;
+          } else {
+            matchScore.them += pepperVal;
+            matchScore.us += pepperVal;
+            resultMsg = `🎉 Opponents Pepper SET! +${pepperVal} to Us, -${pepperVal} to Them!`;
+          }
+        }
+      } else {
+        if (bidderTricks >= contractTarget) {
+          if (bidderIsUs) {
+            matchScore.us += contractTarget;
+            if (defendersTricks === 0) matchScore.them -= contractTarget;
+            else matchScore.them += defendersTricks;
+            resultMsg = `✅ Contract Made! (+${contractTarget} to Us). Defenders took ${defendersTricks} tricks.`;
+          } else {
+            matchScore.them += contractTarget;
+            if (defendersTricks === 0) matchScore.us -= contractTarget;
+            else matchScore.us += defendersTricks;
+            resultMsg = `Opponents made contract (+${contractTarget} to Them).`;
+          }
+        } else {
+          if (bidderIsUs) {
+            matchScore.us -= contractTarget;
+            matchScore.them += defendersTricks;
+            resultMsg = `❌ We were SET! (-${contractTarget} to Us, +${defendersTricks} to Opponents).`;
+          } else {
+            matchScore.them -= contractTarget;
+            matchScore.us += defendersTricks;
+            resultMsg = `🎉 Opponents were SET! (-${contractTarget} to Them, +${defendersTricks} to Us).`;
+          }
+        }
+      }
+
+      updateScoreboardUI();
+      gamePhase = 'hand_over';
+      trickStatusEl.textContent = 'Hand Complete!';
+      trickWinnerBannerEl.textContent = resultMsg;
+      playTone(523.25, 0.4, 'triangle');
+
+      checkMatchWinner();
+    }
+
+    function checkMatchWinner() {
+      if (matchScore.us >= 42 || matchScore.them >= 42 || matchScore.us <= -42 || matchScore.them <= -42) {
+        finalScoreUsEl.textContent = matchScore.us;
+        finalScoreThemEl.textContent = matchScore.them;
+        const weWon = matchScore.us > matchScore.them;
+
+        if (weWon) {
+          careerStats.wins += 1;
+          victoryIconEl.textContent = '🏆';
+          victoryTitleEl.textContent = 'Pepper Champions!';
+          victoryDescEl.textContent = `Your team conquered the table with ${matchScore.us} points!`;
+          fireVictoryConfetti();
+        } else {
+          careerStats.losses += 1;
+          victoryIconEl.textContent = '🥈';
+          victoryTitleEl.textContent = 'Opponents Win Match';
+          victoryDescEl.textContent = `Opponents hit the target first (${matchScore.them} points). Rematch?`;
+        }
+
+        saveProfileAndStats();
+        victoryModalEl.classList.remove('hidden');
+      }
+    }
+
+    function resetEntireMatch() {
+      matchScore = { us: 0, them: 0 };
+      victoryModalEl.classList.add('hidden');
+      dealPepperHands();
+    }
+
+    // --- 16. EVENT LISTENERS ---
+    trumpButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (gamePhase === 'trump_selection') {
+          trumpSuit = btn.dataset.trump;
+          sortSouthHand();
+          renderAllHands();
+          updateBowerGuide();
+          handlePostTrumpFlow();
+        } else if (gamePhase === 'bidding') {
+          trumpSuit = btn.dataset.trump;
+          sortSouthHand();
+          renderAllHands();
+          updateBowerGuide();
+        }
+      });
+    });
+
+    bidButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        handlePlayerBid(btn.dataset.bid);
+      });
+    });
+
+    btnDoExchange.addEventListener('click', startPlayerCardDiscard);
+    btnSkipExchange.addEventListener('click', skipPlayerExchange);
+
+    btnChallenge.addEventListener('click', handlePlayerChallenge);
+    btnSurrender.addEventListener('click', handlePlayerSurrender);
+
+    btnDeal.addEventListener('click', dealPepperHands);
+    btnSort.addEventListener('click', () => {
+      sortSouthHand();
+      renderAllHands();
+    });
+
+    btnNewMatch.addEventListener('click', resetEntireMatch);
+
+    btnProfile.addEventListener('click', () => {
+      profileModalEl.classList.remove('hidden');
+    });
+
+    btnCloseProfile.addEventListener('click', () => {
+      profileModalEl.classList.add('hidden');
+    });
+
+    btnSaveProfile.addEventListener('click', () => {
+      const pName = document.getElementById('input-player-name').value.trim();
+      const ptName = document.getElementById('input-partner-name').value.trim();
+      if (pName) playerName = pName;
+      if (ptName) partnerName = ptName;
+      saveProfileAndStats();
+      renderAllHands();
+      profileModalEl.classList.add('hidden');
+    });
+
+    btnSound.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      soundLabel.textContent = soundEnabled ? 'Sound' : 'Muted';
+      btnSound.firstElementChild.textContent = soundEnabled ? '🔊' : '🔇';
+    });
+
+    window.onload = () => {
+      loadProfileAndStats();
+      dealPepperHands();
+    };
+  </script>
+</body>
+</html>
